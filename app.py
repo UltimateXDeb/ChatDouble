@@ -180,7 +180,7 @@ Return only the short persona description.
 """
     try:
         resp = genai_client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.5-flash-lite",
             contents=prompt,
             options={"temperature": 0.2, "max_output_tokens": 120}
         )
@@ -501,7 +501,7 @@ User: {user_msg}
                     else:
                         try:
                             resp = genai_client.models.generate_content(
-                                model="gemini-1.5-flash",
+                                model="gemini-2.5-flash-lite",
                                 contents=prompt
                             )
                             reply = getattr(resp, "text", None) or (resp.get("message", {}).get("content", "") if isinstance(resp, dict) else "") or "⚠️Offline (Text after sometime)"
@@ -716,7 +716,7 @@ User: {user_input}
         save_chat_history_cloud(user, bot_name, st.session_state[selected_key])
         return
 
-    model_name = "gemini-1.5-flash"
+    model_name = "gemini-2.5-flash-lite"
     try:
         resp_iter = genai_client.models.generate_content_stream(model=model_name, contents=prompt)
     except Exception:
