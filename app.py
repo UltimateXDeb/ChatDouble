@@ -8,9 +8,7 @@ import streamlit as st
 from sentence_transformers import SentenceTransformer
 import faiss
 
-# Use the same import shape you used earlier:
 import google.genai as genai
-
 
 # firebase_db functions you already have in project:
 from firebase_db import (
@@ -25,13 +23,11 @@ from firebase_db import (
 st.set_page_config(page_title="ChatDouble", page_icon="🤖", layout="wide")
 API_KEY = os.getenv("GEMINI_API_KEY") or (st.secrets.get("GEMINI_API_KEY") if st.secrets else None)
 if not API_KEY:
-    # app should still load if missing key — show warning later where generation happens
     genai_client = None
 else:
     genai_client = genai.Client(api_key=API_KEY)
 
 os.makedirs("chats", exist_ok=True)
-
 
 # ---------------------------
 # CSS: WhatsApp-like + remove streamlit header/footer
@@ -75,19 +71,17 @@ footer { visibility: hidden; }
 .chat-header .subtitle { color:#9aa3b2; font-size:13px; }
 
 /* chat window / WhatsApp look */
-/* Chat container card */
 .chat-card {
   background: #0d0d11;
   border-radius: 16px;
   box-shadow: 0 8px 25px rgba(0,0,0,0.6);
-  height: 75vh;              /* fixed chat height */
+  height: 75vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;          /* keep everything inside */
+  overflow: hidden;
   position: relative;
 }
 
-/* Scrollable area for messages */
 .chat-window {
   flex: 1;
   overflow-y: auto;
@@ -99,7 +93,6 @@ footer { visibility: hidden; }
   scroll-behavior: smooth;
 }
 
-/* Hide scrollbars for clean look */
 .chat-window::-webkit-scrollbar {
   width: 6px;
 }
@@ -108,7 +101,6 @@ footer { visibility: hidden; }
   border-radius: 10px;
 }
 
-/* Message bubbles */
 .msg-row { display: flex; }
 .msg.user {
   align-self: flex-end;
@@ -140,12 +132,10 @@ footer { visibility: hidden; }
   text-align: right;
 }
 
-/* input row */
 .input-row { display:flex; gap:10px; margin-top:12px; }
 input.chat-input { flex:1; padding:12px 14px; border-radius:12px; border:1px solid #202124; background:#0f1114; color:#fff; }
 button.send-btn { background:#25D366; color:#000; border:none; padding:10px 14px; border-radius:10px; font-weight:700; }
 
-/* small card */
 .card { background: linear-gradient(180deg,#0f1720,#0b1014); padding:14px; border-radius:10px; box-shadow: 0 8px 20px rgba(0,0,0,0.5); color:#e6eef8; }
 .small-muted { color:#9aa3b2; font-size:13px; }
 
@@ -154,16 +144,10 @@ button.send-btn { background:#25D366; color:#000; border:none; padding:10px 14px
     unsafe_allow_html=True,
 )
 
-
 # ---------------------------
 # Helpers: text extraction, persona, FAISS
 # ---------------------------
 def extract_bot_lines(raw_text, bot_name):
-    """
-    Extract only that person's messages from WhatsApp-style chat exports.
-    Supports formats like:
-    12/04/2023, 5:22 pm - Raykay: message
-    """
     bot_lines = []
     name_lower = bot_name.strip().lower()
 
@@ -172,7 +156,6 @@ def extract_bot_lines(raw_text, bot_name):
             continue
 
         try:
-            # Example: "12/04/2023, 5:22 pm - Raykay: Hello"
             meta, msg = line.split("-", 1)
             speaker, content = msg.split(":", 1)
             speaker = speaker.strip().lower()
@@ -181,18 +164,11 @@ def extract_bot_lines(raw_text, bot_name):
             continue
 
         if speaker == name_lower and len(content.split()) > 1:
-            # remove emojis or keep? keep them.
             bot_lines.append(content)
 
     return "\n".join(bot_lines)
 
-
 def generate_persona(text_examples: str) -> str:
-    """
-    Ask Gemini for a short persona description.
-    Keep temperature low for deterministic output.
-    Tolerant if no genai client is configured.
-    """
     if not text_examples or not genai_client:
         return ""
     prompt = f"""Take these example messages from a single person and write a 1-2 sentence persona description capturing their tone, slang, and typical phrases.
@@ -204,11 +180,10 @@ Return only the short persona description.
 """
     try:
         resp = genai_client.models.generate_content(
-            model="gemini-2.0-flash-exp",
+            model="gemini-1.5-flash",
             contents=prompt,
             options={"temperature": 0.2, "max_output_tokens": 120}
         )
-        # support dict-like and object-like responses
         if isinstance(resp, dict):
             text = resp.get("message", {}).get("content", "") or ""
         else:
@@ -217,23 +192,16 @@ Return only the short persona description.
     except Exception:
         return ""
 
-
 @st.cache_resource(show_spinner=False)
 def build_faiss_for_bot(bot_text: str):
-    """
-    Returns (embed_model, faiss_index, bot_lines list)
-    Cached per content string.
-    """
     bot_lines = [line.strip() for line in bot_text.splitlines() if line.strip()]
     if not bot_lines:
-        # minimal fallback: single placeholder
         bot_lines = ["hello"]
     embed_model = SentenceTransformer("all-MiniLM-L6-v2")
     embeddings = embed_model.encode(bot_lines, convert_to_numpy=True)
     index = faiss.IndexFlatL2(embeddings.shape[1])
     index.add(embeddings)
     return embed_model, index, bot_lines
-
 
 # ---------------------------
 # Session state defaults
@@ -244,15 +212,9 @@ if "logged_in" not in st.session_state:
 if "show_inline_login" not in st.session_state:
     st.session_state.show_inline_login = False
 
-
 # ---------------------------
 # Minimal sidebar: login/logout only
 # ---------------------------
-# The above code is creating a user interface for a chatbot application using Streamlit in Python. It
-# includes a sidebar with a logo and information about the application, an account section where users
-# can login or register, and a section displaying the user's login status. The code handles user
-# authentication, such as logging in, registering, and logging out. It also provides a tip for
-# managing bots and uploading files.
 with st.sidebar:
     st.markdown("<div style='display:flex;align-items:center;gap:10px;'><div style='width:44px;height:44px;border-radius:10px;background:#6c63ff;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700'>CD</div><div><b style='font-size:16px;color:#fff'>ChatDouble</b><div class='small-muted'>Personal chatbots from exports</div></div></div>", unsafe_allow_html=True)
     st.markdown("---")
@@ -298,16 +260,12 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("<div class='small-muted'>Pro tip: manage bots and upload files inside the Manage tab (no sidebar actions required).</div>", unsafe_allow_html=True)
 
-
 # ---------------------------
 # Tabs: Home | Chat | Manage | Buy
 # ---------------------------
 st.markdown("<div class='chat-header'><div class='title'>ChatDouble</div><div class='subtitle'>&nbsp&nbspBring your friends back to chat — private bots from your chat exports.</div></div>", unsafe_allow_html=True)    
 if not st.session_state.logged_in:
-    # Unauthenticated view: show only Home
-    # ----- Home tab -----
     st.markdown("<div class='main-chat-container'>", unsafe_allow_html=True)
-    # st.markdown("<div class='card' style='padding:18px; margin-bottom:14px'>", unsafe_allow_html=True)
     st.markdown("<h3 style='margin:0;color:#fff'>How it works</h3>", unsafe_allow_html=True)
     st.markdown("<ul><li>Upload a chat export (.txt) in Manage tab</li><li>We extract that person's messages and create a bot</li><li>Chat — replies mimic their tone</li></ul>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
@@ -345,9 +303,7 @@ if not st.session_state.logged_in:
     st.markdown("</div>", unsafe_allow_html=True)
 
 else:
-    # Authenticated view: hide Home, show main app
     tabs = st.tabs(["💬 Chat", "🧰 Manage Bots", "🍭 Buy Lollipop"])
-# ----- Chat tab -----
     with tabs[0]:
         user = st.session_state.username
         user_bots = get_user_bots(user)
@@ -355,10 +311,8 @@ else:
         if not user_bots:
             st.info("No bots yet. Create one in Manage Bots tab.")
         else:
-
             col_main, col_side = st.columns([2, 0.9])
 
-            # Right side bot list
             with col_side:
                 st.markdown("<div class='card'><b>Your Bots</b></div>", unsafe_allow_html=True)
                 for b in user_bots:
@@ -368,11 +322,9 @@ else:
                         unsafe_allow_html=True
                     )
 
-            # Left side main chat
             with col_main:
                 selected_bot = st.selectbox("Select bot", [b["name"] for b in user_bots], key="chat_selected_bot")
 
-                # Load bot file
                 res = get_bot_file(user, selected_bot)
                 if isinstance(res, (list, tuple)):
                     bot_text = res[0]
@@ -391,19 +343,16 @@ else:
                 if chat_key not in st.session_state:
                     st.session_state[chat_key] = load_chat_history_cloud(user, selected_bot) or []
 
-                # Header
                 st.markdown(
                     f"<div class='chat-header'><div class='title'>{selected_bot}</div>"
                     f"<div class='subtitle'>Persona: {persona or '—'}</div></div>",
                     unsafe_allow_html=True
                 )
 
-                # CHAT CARD
                 from streamlit.components.v1 import html as components_html
 
                 messages = st.session_state[chat_key]
 
-                # Convert to a simpler format for JS
                 clean_history = []
                 for m in messages:
                     if "user" in m:
@@ -419,167 +368,66 @@ else:
                 <head>
                 <meta charset="utf-8">
                 <style>
-                body {{
-                  margin: 0;
-                  background: transparent;
-                  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
-                }}
-
-                .chat-box {{
-                    height: 100vh;
-                    overflow-y: scroll;
-                    padding: 12px;
-                    box-sizing: border-box;
-                    scrollbar-width: none;         /* Firefox */
-                }}
-
-                .chat-box::-webkit-scrollbar {{
-                    display: none;                 /* Chrome */
-                }}
-
-                .msg {{
-                    display: inline-block;
-                    max-width: 80%;
-                    padding: 10px 14px;
-                    margin-bottom: 8px;
-                    font-size: 15px;
-                    border-radius: 16px;
-                    white-space: pre-wrap;
-                    word-wrap: break-word;
-                }}
-
-
-                .user {{
-                    background: linear-gradient(90deg,#25D366,#128C7E);
-                    color: white;
-                    margin-left: auto;
-                    border-radius: 16px 16px 4px 16px;
-                }}
-
-                .bot {{
-                    background: white;
-                    color: #111;
-                    margin-right: auto;
-                    border-radius: 16px 16px 16px 4px;
-                }}
-
-                @media (max-width: 600px) {{
-                    .msg {{
-                    display: inline-block;
-                    max-width: 80%;
-                    padding: 10px 14px;
-                    margin-bottom: 8px;
-                    border-radius: 16px;
-                    font-size: 15px;
-                    white-space: pre-wrap;
-                    word-wrap: break-word;
-                }}
-
-                }}
-
+                body {{ margin: 0; background: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto; }}
+                .chat-box {{ height: 100vh; overflow-y: scroll; padding: 12px; box-sizing: border-box; scrollbar-width: none; }}
+                .chat-box::-webkit-scrollbar {{ display: none; }}
+                .msg {{ display: inline-block; max-width: 80%; padding: 10px 14px; margin-bottom: 8px; font-size: 15px; border-radius: 16px; white-space: pre-wrap; word-wrap: break-word; }}
+                .user {{ background: linear-gradient(90deg,#25D366,#128C7E); color: white; margin-left: auto; border-radius: 16px 16px 4px 16px; }}
+                .bot {{ background: white; color: #111; margin-right: auto; border-radius: 16px 16px 16px 4px; }}
+                @media (max-width: 600px) {{ .msg {{ max-width: 80%; }} }}
                 </style>
                 </head>
                 <body>
-
                 <div id="chat" class="chat-box"></div>
-
                 <script>
                 const history = {history_json};
-
                 function renderChat() {{
                     const box = document.getElementById("chat");
                     box.innerHTML = "";
-
                     history.forEach(turn => {{
                         const row = document.createElement("div");
                         row.style.display = "flex";
                         row.style.marginBottom = "6px";
-
                         if (turn.role === "user") row.style.justifyContent = "flex-end";
                         else row.style.justifyContent = "flex-start";
-
                         const bubble = document.createElement("div");
                         bubble.className = "msg " + turn.role;
                         bubble.textContent = turn.content;
-
                         row.appendChild(bubble);
                         box.appendChild(row);
                     }});
-
-
                     box.scrollTop = box.scrollHeight;
                     setTimeout(() => box.scrollTop = box.scrollHeight, 50);
                 }}
-
                 renderChat();
-
                 const observer = new MutationObserver(() => {{
                     const box = document.getElementById("chat");
                     box.scrollTop = box.scrollHeight;
                 }});
                 observer.observe(document.getElementById("chat"), {{ childList: true }});
-
                 </script>
-
-
                 </body>
                 </html>
                 """
 
                 components_html(iframe_html, height=500, scrolling=False)
 
-                # --- ensure we clear the text_input BEFORE widget is created (safe) ---
                 if st.session_state.get("pending_clear", False):
-                    # clear the stored value (widget not yet instantiated)
                     st.session_state["chat_input_box"] = ""
                     st.session_state["pending_clear"] = False
 
-                # INPUT BAR
-                # --- INPUT BAR (fixed layout: no gap, button inline) ---
                 st.markdown("""
                 <style>
-                .input-wrapper {
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                    margin-top: 0px !important;   /* remove extra gap */
-                    padding-top: 6px;             /* small clean spacing */
-                }
-
-                .input-wrapper input {
-                    flex: 1;
-                    height: 42px;
-                    border-radius: 12px;
-                    padding: 10px 14px;
-                    border: 1px solid #202124;
-                    background: #0f1114;
-                    color: white;
-                    outline: none;
-                }
-
-                .send-btn-fixed {
-                    background: #25D366;
-                    border: none;
-                    padding: 12px 16px;
-                    border-radius: 12px;
-                    cursor: pointer;
-                    font-weight: bold;
-                    font-size: 16px;
-                }
+                .input-wrapper { display: flex; align-items: center; gap: 10px; margin-top: 0px !important; padding-top: 6px; }
+                .input-wrapper input { flex: 1; height: 42px; border-radius: 12px; padding: 10px 14px; border: 1px solid #202124; background: #0f1114; color: white; outline: none; }
+                .send-btn-fixed { background: #25D366; border: none; padding: 12px 16px; border-radius: 12px; cursor: pointer; font-weight: bold; font-size: 16px; }
                 </style>
                 """, unsafe_allow_html=True)
 
-                # Place input + send button on same row exactly
                 inp_col, btn_col = st.columns([10, 1])
 
                 with inp_col:
-                    user_msg = st.text_input(
-                        "",
-                        key="chat_input_box",
-                        label_visibility="collapsed",
-                        placeholder="Type…"
-                    )
-
+                    user_msg = st.text_input("", key="chat_input_box", label_visibility="collapsed", placeholder="Type…")
                     st.markdown("""
         <script>
             setTimeout(function() {
@@ -592,18 +440,15 @@ else:
                 with btn_col:
                     send = st.button("➤", key="send_chat_btn", use_container_width=True)
 
-
                 if send and user_msg.strip():
                     ts = datetime.now().strftime("%I:%M %p")
                     st.session_state[chat_key].append({"user": user_msg, "bot": "", "ts": ts})
                     save_chat_history_cloud(user, selected_bot, st.session_state[chat_key])
 
-                    # Retrieval
                     vec = embed_model.encode([user_msg])
                     _, idxs = index.search(vec, k=20)
                     retrieved = "\n".join([bot_lines[i] for i in idxs[0] if i < len(bot_lines)])[:2000]
                     
-                    # === Build recent history (all messages in this chat) ===
                     history_lines = []
                     for entry in st.session_state.get(chat_key, []):
                         if "user" in entry:
@@ -615,7 +460,6 @@ else:
                     if len(recent_history) > 4000:
                         recent_history = recent_history[-4000:]
 
-                    # Limit retrieved examples for safety
                     retrieved_examples = retrieved or ""
                     if len(retrieved_examples) > 3000:
                         retrieved_examples = retrieved_examples[:3000]
@@ -650,21 +494,14 @@ Continue the conversation naturally, same tone and slang.
 User: {user_msg}
 {selected_bot}:
 """
-
-
-
                     reply = "..."
-
-                    try:
-                        resp = genai_client.models.generate_content(
-                            model="gemini-2.0-flash-exp",
-                            contents=prompt
-                        )
-                        reply = getattr(resp, "text", None) or (resp.get("message", {}).get("content", "") if isinstance(resp, dict) else "") or "⚠️Offline (Text after sometime)"
-                    except Exception:
+                    
+                    if not genai_client:
+                         reply = "⚠️ Gemini API key not set."
+                    else:
                         try:
                             resp = genai_client.models.generate_content(
-                                model="gemini-2.0-flash",
+                                model="gemini-1.5-flash",
                                 contents=prompt
                             )
                             reply = getattr(resp, "text", None) or (resp.get("message", {}).get("content", "") if isinstance(resp, dict) else "") or "⚠️Offline (Text after sometime)"
@@ -675,13 +512,9 @@ User: {user_msg}
                     st.session_state[chat_key][-1]["ts"] = datetime.now().strftime("%I:%M %p")
                     save_chat_history_cloud(user, selected_bot, st.session_state[chat_key])
 
-                    # mark that input must be cleared on next rerun (safe)
                     st.session_state["pending_clear"] = True
-
-                    # rerun so iframe re-renders with updated history and cleared input
                     st.rerun()
 
-    # ----- Manage Bots tab -----
     with tabs[1]:
         if not st.session_state.logged_in:
             st.warning("Please log in to manage your bots.")
@@ -705,7 +538,6 @@ User: {user_msg}
                 raw = up_file.read().decode("utf-8", "ignore")
                 bot_lines = extract_bot_lines(raw, up_name)
                 if not bot_lines.strip():
-                    # fallback to storing longer lines
                     bot_lines = "\n".join([l for l in raw.splitlines() if len(l.split()) > 1])
                 persona = generate_persona("\n".join(bot_lines.splitlines()[:40]))
                 try:
@@ -717,7 +549,6 @@ User: {user_msg}
     
         st.markdown("</div>", unsafe_allow_html=True)
     
-        # Manage existing bots UI
         st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
         st.markdown("<h4>Your bots</h4>", unsafe_allow_html=True)
         try:
@@ -757,39 +588,25 @@ User: {user_msg}
                     except Exception as e:
                         st.error(f"Clear error: {e}")
     
-    
-    # ----- Buy Lollipop tab -----
     with tabs[2]:
         st.markdown("<div class='card'><h4>Buy developer a lollipop 🍭</h4>", unsafe_allow_html=True)
     
         upi_id = "kolimohit9595-1@okicici"
         upi_qr_url = "https://raw.githubusercontent.com/Mayurkoli8/ChatDouble/refs/heads/main/download.png"
         
-        # ✅ handle external URL QR (http/https only)
         if upi_qr_url and isinstance(upi_qr_url, str):
             if upi_qr_url.lower().startswith("http"):
                 st.image(upi_qr_url, width=220)
             else:
                 st.info("⚠️ Invalid `upi_qr_url` format — must start with http/https (not a local path).")
-        # ✅ Show UPI ID
         st.markdown(f"<h4>UPI ID: <code>{upi_id}</code></h4>", unsafe_allow_html=True)
-
         st.markdown("</div>", unsafe_allow_html=True)
     
-    
-# ---------------------------
-# Final: keep consistent behavior
-# ---------------------------
-# If user pressed Send inside Chat tab, we appended "...thinking" and re-ran.
-# Now, handle streaming generation (separate block that runs after rerun).
-# We detect any chat entries that have bot == "...thinking" and generate for them.
 def process_pending_generation():
-    # Only meaningful when logged in and chat selected
     if not st.session_state.logged_in:
         return
     user = st.session_state.username
     selected_key = None
-    # find any chat keys for this user that have a pending entry
     for k in list(st.session_state.keys()):
         if k.startswith("chat_") and k.endswith(f"_{user}"):
             msgs = st.session_state[k]
@@ -799,11 +616,8 @@ def process_pending_generation():
     if not selected_key:
         return
 
-    # extract selected bot name
-    # format: chat_{bot}_{user}
     try:
         parts = selected_key.split("_")
-        # join middle parts as bot name might contain underscores
         bot_name = "_".join(parts[1:-1])
     except Exception:
         return
@@ -812,12 +626,10 @@ def process_pending_generation():
     pending = msgs[-1]
     user_input = pending.get("user", "")
     if not user_input:
-        # cleanup
         msgs[-1]["bot"] = "⚠️ No user input found."
         save_chat_history_cloud(user, bot_name, st.session_state[selected_key])
         return
 
-    # prepare context using the bot file (if exists)
     try:
         res = get_bot_file(user, bot_name)
         if isinstance(res, (list, tuple)):
@@ -835,9 +647,7 @@ def process_pending_generation():
         save_chat_history_cloud(user, bot_name, st.session_state[selected_key])
         return
 
-    # build FAISS (fast cached)
     embed_model, index, bot_lines = build_faiss_for_bot(bot_text)
-    # retrieval for extra context
     try:
         qvec = embed_model.encode([user_input])
         D, I = index.search(qvec, k=20)
@@ -854,8 +664,6 @@ def process_pending_generation():
     if len(context) > 3000:
         context = context[:3000]
 
-    persona_block = f"Persona: {persona}\n\n" if persona else ""
-    # === Build recent history ===
     history_lines = []
     for entry in msgs:
         if "user" in entry:
@@ -903,23 +711,17 @@ User: {user_input}
 {bot_name}:
 """
 
-
-    # generate (stream if possible)
     if not genai_client:
         pending["bot"] = "⚠️ Gemini API key not set. Add GEMINI_API_KEY to environment or Streamlit secrets."
         save_chat_history_cloud(user, bot_name, st.session_state[selected_key])
         return
 
-    # choose model conservatively
-    model_name = "gemini-2.0-flash-exp"  # general model; change if you prefer flash versions
+    model_name = "gemini-1.5-flash"
     try:
-        # use streaming if available in your genai client
         resp_iter = genai_client.models.generate_content_stream(model=model_name, contents=prompt)
     except Exception:
-        # fallback to single-shot
         try:
             resp = genai_client.models.generate_content(model=model_name, contents=prompt)
-            # extract text
             if isinstance(resp, dict):
                 text = resp.get("message", {}).get("content", "") or ""
             else:
@@ -934,11 +736,9 @@ User: {user_input}
             save_chat_history_cloud(user, bot_name, st.session_state[selected_key])
             return
 
-    # stream handling
     accumulated = ""
     try:
         for chunk in resp_iter:
-            # chunk may be dict-like or obj-like
             text = ""
             if isinstance(chunk, dict):
                 text = chunk.get("message", {}).get("content", "") or chunk.get("text", "") or ""
@@ -947,12 +747,10 @@ User: {user_input}
             if not text:
                 continue
             accumulated += text
-            # update pending bot text in session
             st.session_state[selected_key][-1]["bot"] = accumulated
             st.session_state[selected_key][-1]["ts"] = datetime.now().strftime("%I:%M %p")
-            # persist partial (optionally)
             save_chat_history_cloud(user, bot_name, st.session_state[selected_key])
-        # final
+        
         st.session_state[selected_key][-1]["bot"] = accumulated.strip()
         st.session_state[selected_key][-1]["ts"] = datetime.now().strftime("%I:%M %p")
         save_chat_history_cloud(user, bot_name, st.session_state[selected_key])
@@ -962,7 +760,5 @@ User: {user_input}
         save_chat_history_cloud(user, bot_name, st.session_state[selected_key])
         return
 
-
-# run generation post-render (non-blocking style — runs during this request)
 process_pending_generation()
 # end of file
